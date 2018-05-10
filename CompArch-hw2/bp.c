@@ -5,6 +5,26 @@
 
 int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
              bool isGlobalHist, bool isGlobalTable, int Shared){
+	/*
+	
+				BTB: Local History
+	 _______________________________________
+	| tag |    target    |  History - BHR   |
+	|_____|______________|__________________|
+	|_____|______________|__________________| |  
+	|_____|______________|__________________| |
+	|_____|______________|__________________| btbSize -> from this size derives the branch IP "window".
+	|_____|______________|__________________| |
+	|_____|______________|__________________| |
+	|_____|______________|__________________| |
+		|                         |
+        |	                      |
+	tagSize                    historySize
+	
+	Table is local or global.
+	
+	
+*/	
 	return -1;
 }
 
