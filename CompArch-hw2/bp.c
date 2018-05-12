@@ -87,8 +87,9 @@ void GHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
 void GHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
 void LHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
 void LHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
-void update_state(state_machine* machine, Branch_Event event);
+void update_state(state_machine* machine, bool taken);
 Machine_Prediction get_prediction(state_machine* machine);
+void select_BHR_mask(unsigned historySize);
 //// Function declarations END ////
 
 
@@ -106,10 +107,11 @@ int GHGT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
             bool isGlobalHist, bool isGlobalTable, int Shared){
 
     my_predictor.GHGT_pred.BHR = 0;
+    select_BHR_mask(historySize);
 
     //// Size of state machines array depends on History size.
     int sm_table_size = two_in_power(historySize);
-    printf("sm_table_size = %d\n", sm_table_size);
+    //printf("sm_table_size = %d\n", sm_table_size);
     my_predictor.GHGT_pred.state_machines_array = malloc(sizeof(state_machine)*sm_table_size);
     assert(my_predictor.GHGT_pred.state_machines_array != NULL);
 
@@ -176,15 +178,18 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
 
 bool GHGT_predict(uint32_t pc, uint32_t *dst){
 
-    print_pred_table();
+    //print_pred_table();
+
     //go to state machines table ang get the prediction.
     int j = my_predictor.GHGT_pred.BHR;
-    printf("BHR now is: %d\n",j);
+    //printf("BHR now is: %d\n",j);
     Machine_Prediction prediction = get_prediction(&my_predictor.GHGT_pred.state_machines_array[j]);
-    printf("\nPrediciotn: %d\n",prediction);
+    //printf("\nPrediciotn: %d\n",prediction);
+
+    //printf("index of btb: %d\n",index_from_pc(pc));
 
     if(my_predictor.tags[index_from_pc(pc)] != 0){
-        printf("\nThere are some tag.\n");
+        //printf("\nThere are some tag: 0x%.5X\n",my_predictor.tags[index_from_pc(pc)]);
         if(my_predictor.tags[index_from_pc(pc)] == tag_from_pc(pc)){
             //printf("Here we found an exisiting tag.\n");
 
@@ -197,20 +202,21 @@ bool GHGT_predict(uint32_t pc, uint32_t *dst){
             }
 
         } else {
-            printf("The tag is different form existing tag\n");
-            if(prediction == PRED_NOT_TAKEN){
-                //If prediction is NOT_TAKEN, dst is pc+4.
-                *dst = pc+4;
-            }
+            //printf("The tag is different form existing tag\n");
+
+            // Looks like in this case we just need return NOT_TAKEN and pc+4 and that's it.
+            *dst = pc+4;
+            return false;
 
         }
     } else {
-        printf("\nThere is any tag at all\n");
+        //printf("\nThere is any tag at all\n");
         if(prediction == PRED_NOT_TAKEN){
-            printf("prediction is NOT_TAKEN, dst is pc+4\n");
+            //printf("prediction is NOT_TAKEN, dst is pc+4\n");
             *dst = pc+4;
         } else {
-            printf("prediction is TAKEN what now???\n");
+            //printf("prediction is TAKEN what now???\n");
+            *dst = my_predictor.targets[index_from_pc(pc)];
         }
     }
 
@@ -280,20 +286,28 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 void GHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     // Update the state machine in relevant entry.
     int8_t array_index = my_predictor.GHGT_pred.BHR;
+    //printf("update machine in index: %d ...",array_index);
     update_state(&my_predictor.GHGT_pred.state_machines_array[array_index],taken);
 
     //TODO: update the relevant entry in btb table.
     my_predictor.tags[index_from_pc(pc)] = tag_from_pc(pc);
     my_predictor.targets[index_from_pc(pc)] = targetPc;
 
+    //TODO: if the changing an entry in btb - also init relevant state maschine to WNT.
+
     // Update the BHR according to last prediction apply mask.
     my_predictor.GHGT_pred.BHR = my_predictor.GHGT_pred.BHR << 1;
     if(taken == true){
+        //printf("actual event was TAKEN, so ");
+        //printf("adding 1 to BHR\n");
         my_predictor.GHGT_pred.BHR += 1;
     } else {
+        //printf("actual event was NOT_TAKEN, so ");
+        //printf("adding 0 to BHR\n");
         my_predictor.GHGT_pred.BHR += 0; // Bitch please
     }
     my_predictor.GHGT_pred.BHR = my_predictor.GHGT_pred.BHR & my_predictor.BHR_mask;
+    //printf("Now BHR = %d\n",my_predictor.GHGT_pred.BHR);
 
 
 }
@@ -315,7 +329,7 @@ void BP_GetStats(SIM_stats *curStats) {
 
 Machine_Prediction get_prediction(state_machine* machine){
 
-    printf("Machine state is: %d\n",machine->state);
+    //printf("Machine state is: %d\n",machine->state);
 
     if(machine->state == WT || machine->state == ST){
         return PRED_TAKEN;
@@ -324,25 +338,44 @@ Machine_Prediction get_prediction(state_machine* machine){
     }
 }
 
-void update_state(state_machine* machine, Branch_Event event){
+void update_state(state_machine* machine, bool taken){
 
-    // State machine: SNT <-> WNT <-> WT <-> ST
+    // State machine: enum state{SNT, WNT, WT, ST}
 
-    if (event == BR_TAKEN){
+    if (taken == true){
+        //printf("updating state according to event: taken\n");
         switch (machine->state){
-            case SNT: machine->state = WNT;
-            case WNT: machine->state = WT;
-            case WT: machine->state = ST;
-            case ST: machine->state = ST;
+            case SNT:
+                machine->state = WNT;
+                break;
+            case WNT:
+                machine->state = WT;
+                break;
+            case WT:
+                machine->state = ST;
+                break;
+            case ST:
+                machine->state = ST;
+                break;
         }
-    } else { // event == BR_NOT_TAKEN
+    } else { // not taken
+        //printf("updating state according to event: NOT_taken\n");
         switch (machine->state){
-            case SNT: machine->state = SNT;
-            case WNT: machine->state = SNT;
-            case WT: machine->state = WNT;
-            case ST: machine->state = WT;
+            case SNT:
+                machine->state = SNT;
+                break;
+            case WNT:
+                machine->state = SNT;
+                break;
+            case WT:
+                machine->state = WNT;
+                break;
+            case ST:
+                machine->state = WT;
+                break;
         }
     }
+    //printf("to state: %d\n",machine->state);
 }
 
 // Helper function to init all basic vars of the predictor.
@@ -370,14 +403,30 @@ void vars_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
 
 void select_BHR_mask(unsigned historySize){
     switch (historySize){
-        case 1: my_predictor.BHR_mask = BHR_1BIT_MASK;
-        case 2: my_predictor.BHR_mask = BHR_2BIT_MASK;
-        case 3: my_predictor.BHR_mask = BHR_3BIT_MASK;
-        case 4: my_predictor.BHR_mask = BHR_4BIT_MASK;
-        case 5: my_predictor.BHR_mask = BHR_5BIT_MASK;
-        case 6: my_predictor.BHR_mask = BHR_6BIT_MASK;
-        case 7: my_predictor.BHR_mask = BHR_7BIT_MASK;
-        case 8: my_predictor.BHR_mask = BHR_8BIT_MASK;
+        case 1:
+            my_predictor.BHR_mask = BHR_1BIT_MASK;
+            break;
+        case 2:
+            my_predictor.BHR_mask = BHR_2BIT_MASK;
+            break;
+        case 3:
+            my_predictor.BHR_mask = BHR_3BIT_MASK;
+            break;
+        case 4:
+            my_predictor.BHR_mask = BHR_4BIT_MASK;
+            break;
+        case 5:
+            my_predictor.BHR_mask = BHR_5BIT_MASK;
+            break;
+        case 6:
+            my_predictor.BHR_mask = BHR_6BIT_MASK;
+            break;
+        case 7:
+            my_predictor.BHR_mask = BHR_7BIT_MASK;
+            break;
+        case 8:
+            my_predictor.BHR_mask = BHR_8BIT_MASK;
+            break;
     }
 }
 
