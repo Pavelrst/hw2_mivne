@@ -16,6 +16,8 @@
 #define BHR_7BIT_MASK 127; // For BHR length 7 bit
 #define BHR_8BIT_MASK 255; // For BHR length 8 bit
 
+#define TARGET_SIZE 30
+
 //// Type definitions ////
 typedef enum state{SNT, WNT, WT, ST} Machine_State; // States of 2-bit state machine.
 typedef enum prediction{PRED_TAKEN, PRED_NOT_TAKEN} Machine_Prediction;
@@ -92,19 +94,19 @@ Machine_Prediction get_prediction(state_machine* machine);
 void select_BHR_mask(unsigned historySize);
 //// Function declarations END ////
 
-
-
-
-
 //// Global vars ////
 Predictor my_predictor; // Global variable.
 int flush_num = 0; // actually its a number of mispredictions.
+bool last_prediction_taken;
 int branch_num = 0;
+int size = 0;
 
 
 
 int GHGT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
             bool isGlobalHist, bool isGlobalTable, int Shared){
+
+    size = btbSize*(tagSize + TARGET_SIZE) + historySize + 2*two_in_power(historySize);
 
     my_predictor.GHGT_pred.BHR = 0;
     select_BHR_mask(historySize);
@@ -178,6 +180,7 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
 
 bool GHGT_predict(uint32_t pc, uint32_t *dst){
 
+    branch_num++;
     //print_pred_table();
 
     //go to state machines table ang get the prediction.
@@ -186,6 +189,12 @@ bool GHGT_predict(uint32_t pc, uint32_t *dst){
     Machine_Prediction prediction = get_prediction(&my_predictor.GHGT_pred.state_machines_array[j]);
     //printf("\nPrediciotn: %d\n",prediction);
 
+    // Save last prediction for flush management
+    if(prediction == PRED_TAKEN){
+        last_prediction_taken = true;
+    } else {
+        last_prediction_taken = false;
+    }
     //printf("index of btb: %d\n",index_from_pc(pc));
 
     if(my_predictor.tags[index_from_pc(pc)] != 0){
@@ -206,6 +215,7 @@ bool GHGT_predict(uint32_t pc, uint32_t *dst){
 
             // Looks like in this case we just need return NOT_TAKEN and pc+4 and that's it.
             *dst = pc+4;
+            last_prediction_taken = false;
             return false;
 
         }
@@ -289,11 +299,16 @@ void GHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     //printf("update machine in index: %d ...",array_index);
     update_state(&my_predictor.GHGT_pred.state_machines_array[array_index],taken);
 
-    //TODO: update the relevant entry in btb table.
+    //update the relevant entry in btb table.
     my_predictor.tags[index_from_pc(pc)] = tag_from_pc(pc);
     my_predictor.targets[index_from_pc(pc)] = targetPc;
 
-    //TODO: if the changing an entry in btb - also init relevant state maschine to WNT.
+    //Calculate flush number
+    if (taken != last_prediction_taken){
+        // We had a misprediction, hence flush.
+        flush_num++;
+    }
+    //printf("Flush value: %d\n",flush_num);
 
     // Update the BHR according to last prediction apply mask.
     my_predictor.GHGT_pred.BHR = my_predictor.GHGT_pred.BHR << 1;
@@ -322,6 +337,9 @@ void LHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 }
 
 void BP_GetStats(SIM_stats *curStats) {
+    curStats->flush_num = flush_num;
+    curStats->br_num = branch_num;
+    curStats->size = size;
 	return;
 }
 
