@@ -48,17 +48,17 @@ typedef struct sm_arrays_table{
 typedef struct predictors_gl{
     // In this perictor we have tag + BHRs Table
     // In this perictor we have one State Machines Table.
-    int8_t BHR;
+    uint8_t BHR;
     sm_arrays_table* sm_table;
 } GHLTPred;
 
 typedef struct predictors_ll{
-    int8_t* BHR;
+    uint8_t* BHR;
     sm_arrays_table* sm_table;
 } LHLTPred;
 
 typedef struct predictors_lg{
-    int8_t* BHR;
+    uint8_t* BHR;
     state_machine* state_machines_array;
     int shared_type;
 } LHGTPred;
@@ -99,7 +99,7 @@ void print_pred_table();
 void vars_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
                bool isGlobalHist, bool isGlobalTable, int Shared);
 int two_in_power(int power);
-int index_from_pc(uint32_t pc);
+uint8_t index_from_pc(uint32_t pc);
 uint32_t tag_from_pc(uint32_t pc);
 void set_tag_mask(unsigned int tag_size);
 void GHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
@@ -280,11 +280,11 @@ bool GHGT_predict(uint32_t pc, uint32_t *dst){
     branch_num++;
     //print_pred_table();
 
-    int btb_entry = index_from_pc(pc);
+    uint8_t btb_entry = index_from_pc(pc);
 
     //go to state machines table ang get the prediction.
     //int ms_array_entry = my_predictor.GHGT_pred.BHR;
-    int sm_array_entry = ms_entry_calc(pc, my_predictor.GHGT_pred.BHR, my_predictor.GHGT_pred.shared_type);
+    uint8_t sm_array_entry = ms_entry_calc(pc, my_predictor.GHGT_pred.BHR, my_predictor.GHGT_pred.shared_type);
     //printf("BHR now is: %d\n",sm_array_entry);
     Machine_Prediction prediction = get_prediction(&my_predictor.GHGT_pred.state_machines_array[sm_array_entry]);
     //printf("\nPrediciotn: %d\n",prediction);
@@ -297,7 +297,7 @@ bool GHGT_predict(uint32_t pc, uint32_t *dst){
     }
     //printf("index of btb: %d\n",index_from_pc(pc));
 
-    if(my_predictor.tags[btb_entry] != 0){
+    if(my_predictor.tags[btb_entry] != 0 || my_predictor.targets[btb_entry] != 0){
         //printf("\nThere are some tag: 0x%.5X\n",my_predictor.tags[index_from_pc(pc)]);
         if(my_predictor.tags[btb_entry] == tag_from_pc(pc)){
             //printf("Here we found an exisiting tag.\n");
@@ -342,8 +342,8 @@ bool GHLT_predict(uint32_t pc, uint32_t *dst){
     branch_num++;
 
     //go to state machines table ang get the prediction.
-    int btb_entry = index_from_pc(pc);
-    int sm_array_enty = my_predictor.GHLT_pred.BHR;
+    uint32_t btb_entry = index_from_pc(pc);
+    uint32_t sm_array_enty = my_predictor.GHLT_pred.BHR;
     //if(btb_entry == 0) {
     //    printf("sm_array_enty = %d\n",sm_array_enty);
     //    print_local_pred_table(my_predictor.btbsize, btb_entry);
@@ -415,7 +415,7 @@ bool LHLT_predict(uint32_t pc, uint32_t *dst){
     branch_num++;
 
     //go to state machines table ang get the prediction.
-    int btb_entry = index_from_pc(pc);
+    uint8_t btb_entry = index_from_pc(pc);
     uint8_t sm_array_entry = my_predictor.LHLT_pred.BHR[btb_entry];
 
     //if(btb_entry == 3){
@@ -488,9 +488,9 @@ bool LHGT_predict(uint32_t pc, uint32_t *dst){
     branch_num++;
 
     //go to state machines table ang get the prediction.
-    int btb_entry = index_from_pc(pc);
+    uint8_t btb_entry = index_from_pc(pc);
     //int sm_array_entry = my_predictor.LHGT_pred.BHR[btb_entry];
-    int sm_array_entry = ms_entry_calc(pc, my_predictor.LHGT_pred.BHR[btb_entry], my_predictor.LHGT_pred.shared_type);
+    uint8_t sm_array_entry = ms_entry_calc(pc, my_predictor.LHGT_pred.BHR[btb_entry], my_predictor.LHGT_pred.shared_type);
 
     //printf("btb entry = %d\n",btb_entry);
     //printf("BHR = %d\n",my_predictor.LHGT_pred.BHR[btb_entry]);
@@ -515,7 +515,7 @@ bool LHGT_predict(uint32_t pc, uint32_t *dst){
         last_prediction_taken = false;
     }
 
-    if(my_predictor.tags[btb_entry] != 0){
+    if(my_predictor.tags[btb_entry] != 0 || my_predictor.targets[btb_entry] != 0){
         // we got some tag
         if(my_predictor.tags[index_from_pc(pc)] == tag_from_pc(pc)){
             //printf("Here we found an exisiting tag.\n");
@@ -601,7 +601,7 @@ void GHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     // Update the state machine in relevant entry.
 
     //int8_t array_index = my_predictor.GHGT_pred.BHR;
-    int sm_array_entry = ms_entry_calc(pc, my_predictor.GHGT_pred.BHR, my_predictor.GHGT_pred.shared_type);
+    uint8_t sm_array_entry = ms_entry_calc(pc, my_predictor.GHGT_pred.BHR, my_predictor.GHGT_pred.shared_type);
     //printf("update machine in index: %d ...",array_index);
     update_state(&my_predictor.GHGT_pred.state_machines_array[sm_array_entry],taken);
 
@@ -635,8 +635,8 @@ void GHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 }
 void GHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
-    int btb_entry = index_from_pc(pc);
-    int sm_array_entry = my_predictor.GHLT_pred.BHR;
+    uint8_t btb_entry = index_from_pc(pc);
+    uint8_t sm_array_entry = my_predictor.GHLT_pred.BHR;
 
     // Update the state machine in relevant entry.
     update_state(&my_predictor.GHLT_pred.sm_table[btb_entry].state_machines_array[sm_array_entry],taken);
@@ -673,7 +673,7 @@ void GHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 }
 void LHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
-    int btb_entry = index_from_pc(pc);
+    uint8_t btb_entry = index_from_pc(pc);
     uint8_t sm_array_entry = my_predictor.LHLT_pred.BHR[btb_entry];
     //int sm_array_entry = ms_entry_calc(pc,my_predictor.LHLT_pred.BHR[btb_entry],my_predictor.Shared);
 
@@ -723,9 +723,9 @@ void LHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 }
 void LHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
-    int btb_entry = index_from_pc(pc);
+    uint8_t btb_entry = index_from_pc(pc);
     //int sm_array_entry = my_predictor.LHGT_pred.BHR[btb_entry];
-    int sm_array_entry = ms_entry_calc(pc, my_predictor.LHGT_pred.BHR[btb_entry], my_predictor.LHGT_pred.shared_type);
+    uint8_t sm_array_entry = ms_entry_calc(pc, my_predictor.LHGT_pred.BHR[btb_entry], my_predictor.LHGT_pred.shared_type);
     // Update the state machine in relevant entry.
     update_state(&my_predictor.LHGT_pred.state_machines_array[sm_array_entry],taken);
 
@@ -920,7 +920,7 @@ uint32_t tag_from_pc(uint32_t pc){
     return tag;
 }
 
-int index_from_pc(uint32_t pc){
+uint8_t index_from_pc(uint32_t pc){
     uint32_t shifted_pc = pc >> 2; // Shift two bits left.
     int bits_in_index;
 
