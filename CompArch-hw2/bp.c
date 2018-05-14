@@ -226,7 +226,7 @@ int LHGT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
 
     // Alloc and init ms array.
     int sm_array_size = two_in_power(historySize);
-    //printf("sm_table_size = %d\n", sm_table_size);
+    printf("sm_array_size = %d\n", sm_array_size);
     my_predictor.LHGT_pred.state_machines_array = malloc(sizeof(state_machine)*sm_array_size);
     assert(my_predictor.LHGT_pred.state_machines_array != NULL);
 
@@ -476,6 +476,11 @@ bool LHGT_predict(uint32_t pc, uint32_t *dst){
     int sm_array_entry = ms_entry_calc(pc, my_predictor.LHGT_pred.BHR[btb_entry], my_predictor.LHGT_pred.shared_type);
 
     //printf("btb entry = %d\n",btb_entry);
+    //printf("BHR = %d\n",my_predictor.LHGT_pred.BHR[btb_entry]);
+    //printf("pc = %d\n",pc);
+    //printf("sm entry = %d\n",sm_array_entry);
+
+    //printf("btb entry = %d\n",btb_entry);
     //print_local_pred_table(my_predictor.btbsize);
 
     Machine_Prediction prediction = get_prediction(&my_predictor.LHGT_pred.state_machines_array[sm_array_entry]);
@@ -510,7 +515,7 @@ bool LHGT_predict(uint32_t pc, uint32_t *dst){
             // Looks like in this case we just need return NOT_TAKEN and pc+4 and that's it.
             *dst = pc+4;
             last_prediction_taken = false;
-            //my_predictor.LHGT_pred.BHR[btb_entry] = 0;
+            my_predictor.LHGT_pred.BHR[btb_entry] = 0;
             return false;
         }
     } else {
@@ -688,8 +693,8 @@ void LHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 void LHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     int btb_entry = index_from_pc(pc);
-    int sm_array_entry = my_predictor.LHGT_pred.BHR[btb_entry];
-
+    //int sm_array_entry = my_predictor.LHGT_pred.BHR[btb_entry];
+    int sm_array_entry = ms_entry_calc(pc, my_predictor.LHGT_pred.BHR[btb_entry], my_predictor.LHGT_pred.shared_type);
     // Update the state machine in relevant entry.
     update_state(&my_predictor.LHGT_pred.state_machines_array[sm_array_entry],taken);
 
@@ -946,11 +951,11 @@ int ms_entry_calc(uint32_t pc, int8_t BHR, int Shared){
         case NOT_USING_SHARE:
             return BHR;
         case USING_SHARE_LSB:
-            shifted_pc = pc << 2;
-            return BHR ^ shifted_pc;
+            shifted_pc = pc >> 2;
+            return (BHR ^ shifted_pc) & my_predictor.BHR_mask;
         case USING_SHARE_MID:
-            shifted_pc = pc << 16;
-            return BHR ^ shifted_pc;
+            shifted_pc = pc >> 16;
+            return (BHR ^ shifted_pc) & my_predictor.BHR_mask;
     }
 }
 
