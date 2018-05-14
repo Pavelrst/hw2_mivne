@@ -123,7 +123,7 @@ int size = 0;
 
 
 
-int GHGT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
+void GHGT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
             bool isGlobalHist, bool isGlobalTable, int Shared){
 
     my_predictor.GHGT_pred.shared_type = Shared;
@@ -146,7 +146,7 @@ int GHGT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
 
 }
 
-int GHLT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
+void GHLT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
               bool isGlobalHist, bool isGlobalTable, int Shared){
 
     size = btbSize*(tagSize + TARGET_SIZE + 2*two_in_power(historySize)) + historySize;
@@ -174,7 +174,7 @@ int GHLT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
     }
 }
 
-int LHLT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
+void LHLT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
               bool isGlobalHist, bool isGlobalTable, int Shared){
 
     size = btbSize*(tagSize + TARGET_SIZE + historySize + 2*two_in_power(historySize));
@@ -208,7 +208,7 @@ int LHLT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
     //print_local_pred_table(btbSize);
 }
 
-int LHGT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
+void LHGT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
               bool isGlobalHist, bool isGlobalTable, int Shared){
 
     my_predictor.LHGT_pred.shared_type = Shared;
@@ -952,6 +952,7 @@ int ms_entry_calc(uint32_t pc, int8_t BHR, int Shared){
             shifted_pc = pc << 16;
             return BHR ^ shifted_pc;
     }
+    return  -1;
 }
 
 void print_pred_table(){
