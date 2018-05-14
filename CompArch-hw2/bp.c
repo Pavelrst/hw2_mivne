@@ -48,17 +48,17 @@ typedef struct sm_arrays_table{
 typedef struct predictors_gl{
     // In this perictor we have tag + BHRs Table
     // In this perictor we have one State Machines Table.
-    int8_t BHR;
+    uint8_t BHR;
     sm_arrays_table* sm_table;
 } GHLTPred;
 
 typedef struct predictors_ll{
-    int8_t* BHR;
+    uint8_t* BHR;
     sm_arrays_table* sm_table;
 } LHLTPred;
 
 typedef struct predictors_lg{
-    int8_t* BHR;
+    uint8_t* BHR;
     state_machine* state_machines_array;
     int shared_type;
 } LHGTPred;
@@ -99,7 +99,7 @@ void print_pred_table();
 void vars_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
                bool isGlobalHist, bool isGlobalTable, int Shared);
 int two_in_power(int power);
-int index_from_pc(uint32_t pc);
+uint8_t index_from_pc(uint32_t pc);
 uint32_t tag_from_pc(uint32_t pc);
 void set_tag_mask(unsigned int tag_size);
 void GHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
@@ -109,7 +109,8 @@ void LHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
 void update_state(state_machine* machine, bool taken);
 Machine_Prediction get_prediction(state_machine* machine);
 void select_BHR_mask(unsigned historySize);
-void print_local_pred_table(int btb_size);
+//void print_local_pred_table(int btb_size);
+void print_local_pred_table(int btb_size, int btb_entry);
 int ms_entry_calc(uint32_t pc, int8_t BHR, int Shared);
 //// Function declarations END ////
 
@@ -226,7 +227,7 @@ void LHGT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
 
     // Alloc and init ms array.
     int sm_array_size = two_in_power(historySize);
-    //printf("sm_table_size = %d\n", sm_table_size);
+    //printf("sm_array_size = %d\n", sm_array_size);
     my_predictor.LHGT_pred.state_machines_array = malloc(sizeof(state_machine)*sm_array_size);
     assert(my_predictor.LHGT_pred.state_machines_array != NULL);
 
@@ -240,7 +241,7 @@ void LHGT_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
 
 int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
              bool isGlobalHist, bool isGlobalTable, int Shared){
-    printf("BP_init\n btb_size: %d \n history size: %d \n tag size %d \n",btbSize,historySize,tagSize);
+    //printf("BP_init\n btb_size: %d \n history size: %d \n tag size %d \n",btbSize,historySize,tagSize);
 
     //// Inits the vars and allocate the btb - without the predictor.
     vars_init(btbSize, historySize, tagSize, isGlobalHist, isGlobalTable, Shared);
@@ -279,12 +280,12 @@ bool GHGT_predict(uint32_t pc, uint32_t *dst){
     branch_num++;
     //print_pred_table();
 
-    int btb_entry = index_from_pc(pc);
+    uint8_t btb_entry = index_from_pc(pc);
 
     //go to state machines table ang get the prediction.
     //int ms_array_entry = my_predictor.GHGT_pred.BHR;
-    int sm_array_entry = ms_entry_calc(pc, my_predictor.GHGT_pred.BHR, my_predictor.GHGT_pred.shared_type);
-    //printf("BHR now is: %d\n",j);
+    uint8_t sm_array_entry = ms_entry_calc(pc, my_predictor.GHGT_pred.BHR, my_predictor.GHGT_pred.shared_type);
+    //printf("BHR now is: %d\n",sm_array_entry);
     Machine_Prediction prediction = get_prediction(&my_predictor.GHGT_pred.state_machines_array[sm_array_entry]);
     //printf("\nPrediciotn: %d\n",prediction);
 
@@ -296,7 +297,7 @@ bool GHGT_predict(uint32_t pc, uint32_t *dst){
     }
     //printf("index of btb: %d\n",index_from_pc(pc));
 
-    if(my_predictor.tags[btb_entry] != 0){
+    if(my_predictor.tags[btb_entry] != 0 || my_predictor.targets[btb_entry] != 0){
         //printf("\nThere are some tag: 0x%.5X\n",my_predictor.tags[index_from_pc(pc)]);
         if(my_predictor.tags[btb_entry] == tag_from_pc(pc)){
             //printf("Here we found an exisiting tag.\n");
@@ -341,8 +342,13 @@ bool GHLT_predict(uint32_t pc, uint32_t *dst){
     branch_num++;
 
     //go to state machines table ang get the prediction.
-    int btb_entry = index_from_pc(pc);
-    int sm_array_enty = my_predictor.GHLT_pred.BHR;
+    uint32_t btb_entry = index_from_pc(pc);
+    uint32_t sm_array_enty = my_predictor.GHLT_pred.BHR;
+    //if(btb_entry == 0) {
+    //    printf("sm_array_enty = %d\n",sm_array_enty);
+    //    print_local_pred_table(my_predictor.btbsize, btb_entry);
+    //}
+
 
     //printf("btb entry = %d\n",btb_entry);
     //print_local_pred_table(my_predictor.btbsize);
@@ -362,9 +368,9 @@ bool GHLT_predict(uint32_t pc, uint32_t *dst){
         last_prediction_taken = false;
     }
 
-    if(my_predictor.tags[btb_entry] != 0){
+    if(my_predictor.tags[btb_entry] != 0 || my_predictor.targets[btb_entry] != 0){
         // we got some tag
-        if(my_predictor.tags[index_from_pc(pc)] == tag_from_pc(pc)){
+        if(my_predictor.tags[btb_entry] == tag_from_pc(pc)){
             //printf("Here we found an exisiting tag.\n");
             if(prediction == PRED_TAKEN){
                 //printf("tag exist AND prediction is TAKEN, then dst = target.\n");
@@ -374,11 +380,16 @@ bool GHLT_predict(uint32_t pc, uint32_t *dst){
                 *dst = pc+4;
             }
         } else {
-            //printf("The tag is different form existing tag\n");
+            //if(btb_entry == 0) printf("The tag = %d is different form existing tag = %d\n",);
 
-            // Looks like in this case we just need return NOT_TAKEN and pc+4 and that's it.
+            // In this case we just need return NOT_TAKEN and pc+4 and reset all ms_array in this row.
             *dst = pc+4;
             last_prediction_taken = false;
+            predictor_needs_reset = true;
+            //my_predictor.GHLT_pred.BHR = 0;
+            for(int i=0;i<two_in_power(my_predictor.historySize);i++){
+                my_predictor.GHLT_pred.sm_table[btb_entry].state_machines_array[i].state = WNT;
+            }
             return false;
         }
     } else {
@@ -404,8 +415,13 @@ bool LHLT_predict(uint32_t pc, uint32_t *dst){
     branch_num++;
 
     //go to state machines table ang get the prediction.
-    int btb_entry = index_from_pc(pc);
-    int sm_array_entry = my_predictor.LHLT_pred.BHR[btb_entry];
+    uint8_t btb_entry = index_from_pc(pc);
+    uint8_t sm_array_entry = my_predictor.LHLT_pred.BHR[btb_entry];
+
+    //if(btb_entry == 3){
+    //    printf("btb entry = %d\n, BHR = %d",btb_entry,sm_array_entry);
+    //    //print_local_pred_table(my_predictor.btbsize,btb_entry);
+    //}
 
     //printf("btb entry = %d\n",btb_entry);
     //print_local_pred_table(my_predictor.btbsize);
@@ -425,9 +441,10 @@ bool LHLT_predict(uint32_t pc, uint32_t *dst){
         last_prediction_taken = false;
     }
 
-    if(my_predictor.tags[btb_entry] != 0){
+    //if(my_predictor.tags[btb_entry] != 0){
+    if(my_predictor.tags[btb_entry] != 0 || my_predictor.targets[btb_entry] != 0){
         // we got some tag
-        if(my_predictor.tags[index_from_pc(pc)] == tag_from_pc(pc)){
+        if(my_predictor.tags[btb_entry] == tag_from_pc(pc)){
             //printf("Here we found an exisiting tag.\n");
             if(prediction == PRED_TAKEN){
                 //printf("tag exist AND prediction is TAKEN, then dst = target.\n");
@@ -437,7 +454,7 @@ bool LHLT_predict(uint32_t pc, uint32_t *dst){
                 *dst = pc+4;
             }
         } else {
-            //printf("The tag is different form existing tag\n");
+            //if(btb_entry == 3) printf("The tag is different form existing tag\n");
 
             // In this case we just need return NOT_TAKEN and pc+4 and reset all ms_array in this row.
             *dst = pc+4;
@@ -456,7 +473,7 @@ bool LHLT_predict(uint32_t pc, uint32_t *dst){
             *dst = pc+4;
         } else {
             //printf("prediction is TAKEN what now???\n");
-            *dst = my_predictor.targets[index_from_pc(pc)];
+            *dst = my_predictor.targets[btb_entry];
         }
     }
 
@@ -471,9 +488,14 @@ bool LHGT_predict(uint32_t pc, uint32_t *dst){
     branch_num++;
 
     //go to state machines table ang get the prediction.
-    int btb_entry = index_from_pc(pc);
+    uint8_t btb_entry = index_from_pc(pc);
     //int sm_array_entry = my_predictor.LHGT_pred.BHR[btb_entry];
-    int sm_array_entry = ms_entry_calc(pc, my_predictor.LHGT_pred.BHR[btb_entry], my_predictor.LHGT_pred.shared_type);
+    uint8_t sm_array_entry = ms_entry_calc(pc, my_predictor.LHGT_pred.BHR[btb_entry], my_predictor.LHGT_pred.shared_type);
+
+    //printf("btb entry = %d\n",btb_entry);
+    //printf("BHR = %d\n",my_predictor.LHGT_pred.BHR[btb_entry]);
+    //printf("pc = %d\n",pc);
+    //printf("sm entry = %d\n",sm_array_entry);
 
     //printf("btb entry = %d\n",btb_entry);
     //print_local_pred_table(my_predictor.btbsize);
@@ -493,7 +515,7 @@ bool LHGT_predict(uint32_t pc, uint32_t *dst){
         last_prediction_taken = false;
     }
 
-    if(my_predictor.tags[btb_entry] != 0){
+    if(my_predictor.tags[btb_entry] != 0 || my_predictor.targets[btb_entry] != 0){
         // we got some tag
         if(my_predictor.tags[index_from_pc(pc)] == tag_from_pc(pc)){
             //printf("Here we found an exisiting tag.\n");
@@ -510,7 +532,7 @@ bool LHGT_predict(uint32_t pc, uint32_t *dst){
             // Looks like in this case we just need return NOT_TAKEN and pc+4 and that's it.
             *dst = pc+4;
             last_prediction_taken = false;
-            //my_predictor.LHGT_pred.BHR[btb_entry] = 0;
+            my_predictor.LHGT_pred.BHR[btb_entry] = 0;
             return false;
         }
     } else {
@@ -577,9 +599,11 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 void GHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     // Update the state machine in relevant entry.
-    int8_t array_index = my_predictor.GHGT_pred.BHR;
+
+    //int8_t array_index = my_predictor.GHGT_pred.BHR;
+    uint8_t sm_array_entry = ms_entry_calc(pc, my_predictor.GHGT_pred.BHR, my_predictor.GHGT_pred.shared_type);
     //printf("update machine in index: %d ...",array_index);
-    update_state(&my_predictor.GHGT_pred.state_machines_array[array_index],taken);
+    update_state(&my_predictor.GHGT_pred.state_machines_array[sm_array_entry],taken);
 
     //update the relevant entry in btb table.
     my_predictor.tags[index_from_pc(pc)] = tag_from_pc(pc);
@@ -588,6 +612,8 @@ void GHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     //Calculate flush number
     if (taken != last_prediction_taken){
         // We had a misprediction, hence flush.
+        flush_num++;
+    } else if(last_prediction_taken && (targetPc != pred_dst)){
         flush_num++;
     }
     //printf("Flush value: %d\n",flush_num);
@@ -609,8 +635,8 @@ void GHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 }
 void GHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
-    int btb_entry = index_from_pc(pc);
-    int sm_array_entry = my_predictor.GHLT_pred.BHR;
+    uint8_t btb_entry = index_from_pc(pc);
+    uint8_t sm_array_entry = my_predictor.GHLT_pred.BHR;
 
     // Update the state machine in relevant entry.
     update_state(&my_predictor.GHLT_pred.sm_table[btb_entry].state_machines_array[sm_array_entry],taken);
@@ -622,6 +648,8 @@ void GHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     //Calculate flush number
     if (taken != last_prediction_taken){
         // We had a misprediction, hence flush.
+        flush_num++;
+    } else if(last_prediction_taken && (targetPc != pred_dst)){
         flush_num++;
     }
     //printf("Flush value: %d\n",flush_num);
@@ -645,8 +673,11 @@ void GHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 }
 void LHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
-    int btb_entry = index_from_pc(pc);
-    int sm_array_entry = my_predictor.LHLT_pred.BHR[btb_entry];
+    uint8_t btb_entry = index_from_pc(pc);
+    uint8_t sm_array_entry = my_predictor.LHLT_pred.BHR[btb_entry];
+    //int sm_array_entry = ms_entry_calc(pc,my_predictor.LHLT_pred.BHR[btb_entry],my_predictor.Shared);
+
+
 
     // Update the state machine in relevant entry.
     update_state(&my_predictor.LHLT_pred.sm_table[btb_entry].state_machines_array[sm_array_entry],taken);
@@ -659,6 +690,8 @@ void LHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     if (taken != last_prediction_taken){
         // We had a misprediction, hence flush.
         flush_num++;
+    } else if(last_prediction_taken && (targetPc != pred_dst)){
+        flush_num++;
     }
     //printf("Flush value: %d\n",flush_num);
 
@@ -667,17 +700,21 @@ void LHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
         //my_predictor.LHLT_pred.sm_table[btb_entry].state_machines_array[sm_array_entry].state = WNT;
 
         // Update the BHR according to last prediction apply mask.
-        my_predictor.LHLT_pred.BHR[btb_entry] = my_predictor.LHLT_pred.BHR[btb_entry] << 1;
-        if (taken == true) {
-            //printf("actual event was TAKEN, so ");
-            //printf("adding 1 to BHR\n");
-            my_predictor.LHLT_pred.BHR[btb_entry] += 1;
-        } else {
-            //printf("actual event was NOT_TAKEN, so ");
-            //printf("adding 0 to BHR\n");
-            my_predictor.LHLT_pred.BHR[btb_entry] += 0; // Bitch please
-        }
-        my_predictor.LHLT_pred.BHR[btb_entry] = my_predictor.LHLT_pred.BHR[btb_entry] & my_predictor.BHR_mask;
+    my_predictor.LHLT_pred.BHR[btb_entry] = my_predictor.LHLT_pred.BHR[btb_entry] << 1;
+    if (taken == true) {
+        //printf("actual event was TAKEN, so ");
+        //printf("adding 1 to BHR\n");
+        my_predictor.LHLT_pred.BHR[btb_entry] += 1;
+    } else {
+        //printf("actual event was NOT_TAKEN, so ");
+        //printf("adding 0 to BHR\n");
+        my_predictor.LHLT_pred.BHR[btb_entry] += 0; // Bitch please
+    }
+
+    my_predictor.LHLT_pred.BHR[btb_entry] = my_predictor.LHLT_pred.BHR[btb_entry] & my_predictor.BHR_mask;
+
+
+
 
 
     //printf("sm after update:\n");
@@ -685,11 +722,10 @@ void LHLT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     //printf("___________________________________\n");
 
 }
-
 void LHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
-    int btb_entry = index_from_pc(pc);
-    int sm_array_entry = my_predictor.LHGT_pred.BHR[btb_entry];
-
+    uint8_t btb_entry = index_from_pc(pc);
+    //int sm_array_entry = my_predictor.LHGT_pred.BHR[btb_entry];
+    uint8_t sm_array_entry = ms_entry_calc(pc, my_predictor.LHGT_pred.BHR[btb_entry], my_predictor.LHGT_pred.shared_type);
     // Update the state machine in relevant entry.
     update_state(&my_predictor.LHGT_pred.state_machines_array[sm_array_entry],taken);
 
@@ -700,6 +736,8 @@ void LHGT_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     //Calculate flush number
     if (taken != last_prediction_taken){
         // We had a misprediction, hence flush.
+        flush_num++;
+    } else if(last_prediction_taken && (targetPc != pred_dst)){
         flush_num++;
     }
     //printf("Flush value: %d\n",flush_num);
@@ -729,8 +767,7 @@ void BP_GetStats(SIM_stats *curStats) {
 	return;
 }
 
-///// Helper Functions /////
-
+///// Helper Functions ////
 Machine_Prediction get_prediction(state_machine* machine){
 
     //printf("Machine state is: %d\n",machine->state);
@@ -830,6 +867,7 @@ void select_BHR_mask(unsigned historySize){
             break;
         case 8:
             my_predictor.BHR_mask = BHR_8BIT_MASK;
+            //printf("BHR mask is %d\n",my_predictor.BHR_mask);
             break;
     }
 }
@@ -882,7 +920,7 @@ uint32_t tag_from_pc(uint32_t pc){
     return tag;
 }
 
-int index_from_pc(uint32_t pc){
+uint8_t index_from_pc(uint32_t pc){
     uint32_t shifted_pc = pc >> 2; // Shift two bits left.
     int bits_in_index;
 
@@ -946,31 +984,78 @@ int ms_entry_calc(uint32_t pc, int8_t BHR, int Shared){
         case NOT_USING_SHARE:
             return BHR;
         case USING_SHARE_LSB:
-            shifted_pc = pc << 2;
-            return BHR ^ shifted_pc;
+            shifted_pc = pc >> 2;
+            return (BHR ^ shifted_pc) & my_predictor.BHR_mask;
         case USING_SHARE_MID:
-            shifted_pc = pc << 16;
-            return BHR ^ shifted_pc;
+            shifted_pc = pc >> 16;
+            return (BHR ^ shifted_pc) & my_predictor.BHR_mask;
     }
     return  -1;
 }
 
 void print_pred_table(){
     int size = two_in_power(my_predictor.historySize);
-    printf("\nms:\n");
+    printf("\nms:  ");
     for(int i=0;i<size;i++){
         int state = my_predictor.GHGT_pred.state_machines_array[i].state;
-        printf("state: %d\n",state);
+        switch (state){
+            case 0:
+                printf("_SNT_");
+                break;
+            case 1:
+                printf("_WNT_");
+                break;
+            case 2:
+                printf("_WT_");
+                break;
+            case 3:
+                printf("_ST_");
+                break;
+        }
     }
+    printf("\n");
 }
 
-void print_local_pred_table(int btb_size){
+void print_local_pred_table(int btb_size, int btb_entry){
     int array_size = two_in_power(my_predictor.historySize);
-    printf("ms:\n");
-    for(int i=0;i<btb_size;i++){
-        printf("sm %d:",i);
+    if(btb_entry == -1){
+        printf("ms:\n");
+        for(int i=0;i<btb_size;i++){
+            printf("sm %d:",i);
+            for (int j = 0; j < array_size; ++j) {
+                int sm_state;
+                if(my_predictor.my_predicotr_type == LHLT){
+                    sm_state = my_predictor.LHLT_pred.sm_table[i].state_machines_array[j].state;
+                } else if(my_predictor.my_predicotr_type == GHLT){
+                    sm_state = my_predictor.GHLT_pred.sm_table[i].state_machines_array[j].state;
+                }
+                switch (sm_state){
+                    case 0:
+                        printf("_SNT_");
+                        break;
+                    case 1:
+                        printf("_WNT_");
+                        break;
+                    case 2:
+                        printf("_WT_");
+                        break;
+                    case 3:
+                        printf("_ST_");
+                        break;
+                }
+
+            }
+            printf("\n");
+        }
+    } else {
+        printf("sm %d:",btb_entry);
         for (int j = 0; j < array_size; ++j) {
-            int sm_state = my_predictor.LHLT_pred.sm_table[i].state_machines_array[j].state;
+            int sm_state;
+            if(my_predictor.my_predicotr_type == LHLT){
+                sm_state = my_predictor.LHLT_pred.sm_table[btb_entry].state_machines_array[j].state;
+            } else if(my_predictor.my_predicotr_type == GHLT){
+                sm_state = my_predictor.GHLT_pred.sm_table[btb_entry].state_machines_array[j].state;
+            }
             switch (sm_state){
                 case 0:
                     printf("_SNT_");
@@ -989,4 +1074,5 @@ void print_local_pred_table(int btb_size){
         }
         printf("\n");
     }
+
 }
