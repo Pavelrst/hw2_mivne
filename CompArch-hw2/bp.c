@@ -510,6 +510,7 @@ bool LHGT_predict(uint32_t pc, uint32_t *dst){
             // Looks like in this case we just need return NOT_TAKEN and pc+4 and that's it.
             *dst = pc+4;
             last_prediction_taken = false;
+            //my_predictor.LHGT_pred.BHR[btb_entry] = 0;
             return false;
         }
     } else {
