@@ -111,7 +111,7 @@ Machine_Prediction get_prediction(state_machine* machine);
 void select_BHR_mask(unsigned historySize);
 //void print_local_pred_table(int btb_size);
 void print_local_pred_table(int btb_size, int btb_entry);
-int ms_entry_calc(uint32_t pc, int8_t BHR, int Shared);
+uint8_t ms_entry_calc(uint32_t pc, uint8_t BHR, int Shared);
 //// Function declarations END ////
 
 //// Global vars ////
@@ -278,14 +278,18 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize,
 bool GHGT_predict(uint32_t pc, uint32_t *dst){
 
     branch_num++;
-    //print_pred_table();
+
 
     uint8_t btb_entry = index_from_pc(pc);
 
     //go to state machines table ang get the prediction.
     //int ms_array_entry = my_predictor.GHGT_pred.BHR;
     uint8_t sm_array_entry = ms_entry_calc(pc, my_predictor.GHGT_pred.BHR, my_predictor.GHGT_pred.shared_type);
+
+    //printf("index of btb: %d\n",btb_entry);
     //printf("BHR now is: %d\n",sm_array_entry);
+    //print_pred_table();
+
     Machine_Prediction prediction = get_prediction(&my_predictor.GHGT_pred.state_machines_array[sm_array_entry]);
     //printf("\nPrediciotn: %d\n",prediction);
 
@@ -295,7 +299,8 @@ bool GHGT_predict(uint32_t pc, uint32_t *dst){
     } else {
         last_prediction_taken = false;
     }
-    //printf("index of btb: %d\n",index_from_pc(pc));
+
+
 
     if(my_predictor.tags[btb_entry] != 0 || my_predictor.targets[btb_entry] != 0){
         //printf("\nThere are some tag: 0x%.5X\n",my_predictor.tags[index_from_pc(pc)]);
@@ -321,13 +326,18 @@ bool GHGT_predict(uint32_t pc, uint32_t *dst){
         }
     } else {
         //printf("\nThere is any tag at all\n");
-        if(prediction == PRED_NOT_TAKEN){
-            //printf("prediction is NOT_TAKEN, dst is pc+4\n");
-            *dst = pc+4;
-        } else {
-            //printf("prediction is TAKEN what now???\n");
-            *dst = my_predictor.targets[btb_entry];
-        }
+
+        //if(prediction == PRED_NOT_TAKEN){
+        //    //printf("prediction is NOT_TAKEN, dst is pc+4\n");
+        //    *dst = pc+4;
+        //} else {
+        //    //printf("prediction is TAKEN what now???\n");
+        //    //*dst = my_predictor.targets[btb_entry];
+        //    *dst = pc+4;
+        //}
+        *dst = pc+4;
+        last_prediction_taken = false;
+        return false;
     }
 
 
@@ -394,13 +404,16 @@ bool GHLT_predict(uint32_t pc, uint32_t *dst){
         }
     } else {
         //new line in btb
-        if(prediction == PRED_NOT_TAKEN){
-            //printf("prediction is NOT_TAKEN, dst is pc+4\n");
-            *dst = pc+4;
-        } else {
-            //printf("prediction is TAKEN what now???\n");
-            *dst = my_predictor.targets[index_from_pc(pc)];
-        }
+        //if(prediction == PRED_NOT_TAKEN){
+        //    //printf("prediction is NOT_TAKEN, dst is pc+4\n");
+        //    *dst = pc+4;
+        //} else {
+        //    //printf("prediction is TAKEN what now???\n");
+        //    *dst = my_predictor.targets[index_from_pc(pc)];
+        //}
+        *dst = pc+4;
+        last_prediction_taken = false;
+        return false;
     }
 
     if(prediction == PRED_TAKEN){
@@ -468,13 +481,17 @@ bool LHLT_predict(uint32_t pc, uint32_t *dst){
         }
     } else {
         //new line in btb
-        if(prediction == PRED_NOT_TAKEN){
-            //printf("prediction is NOT_TAKEN, dst is pc+4\n");
-            *dst = pc+4;
-        } else {
-            //printf("prediction is TAKEN what now???\n");
-            *dst = my_predictor.targets[btb_entry];
-        }
+        //if(prediction == PRED_NOT_TAKEN){
+        //    //printf("prediction is NOT_TAKEN, dst is pc+4\n");
+        //    *dst = pc+4;
+        //} else {
+        //    //printf("prediction is TAKEN what now???\n");
+        //    *dst = my_predictor.targets[index_from_pc(pc)];
+        //}
+        *dst = pc+4;
+        last_prediction_taken = false;
+        return false;
+
     }
 
     if(prediction == PRED_TAKEN){
@@ -537,13 +554,16 @@ bool LHGT_predict(uint32_t pc, uint32_t *dst){
         }
     } else {
         //new line in btb
-        if(prediction == PRED_NOT_TAKEN){
-            //printf("prediction is NOT_TAKEN, dst is pc+4\n");
-            *dst = pc+4;
-        } else {
-            //printf("prediction is TAKEN what now???\n");
-            *dst = my_predictor.targets[index_from_pc(pc)];
-        }
+        //if(prediction == PRED_NOT_TAKEN){
+        //    //printf("prediction is NOT_TAKEN, dst is pc+4\n");
+        //    *dst = pc+4;
+        //} else {
+        //    //printf("prediction is TAKEN what now???\n");
+        //    *dst = my_predictor.targets[index_from_pc(pc)];
+        //}
+        *dst = pc+4;
+        last_prediction_taken = false;
+        return false;
     }
 
     if(prediction == PRED_TAKEN){
@@ -976,21 +996,21 @@ uint8_t index_from_pc(uint32_t pc){
     return shifted_pc & index_mask;
 }
 
-int ms_entry_calc(uint32_t pc, int8_t BHR, int Shared){
+uint8_t ms_entry_calc(uint32_t pc, uint8_t BHR, int Shared){
 
-    int shifted_pc;
+    uint8_t shifted_pc;
 
     switch (Shared){
         case NOT_USING_SHARE:
             return BHR;
         case USING_SHARE_LSB:
-            shifted_pc = pc >> 2;
+            shifted_pc = (uint8_t)(pc >> 2);
             return (BHR ^ shifted_pc) & my_predictor.BHR_mask;
         case USING_SHARE_MID:
-            shifted_pc = pc >> 16;
+            shifted_pc = (uint8_t)(pc >> 16);
             return (BHR ^ shifted_pc) & my_predictor.BHR_mask;
     }
-    return  -1;
+    return  0;
 }
 
 void print_pred_table(){
