@@ -1,4 +1,2 @@
-What to do next:
-
-1) Calculation of flushes + size of table etc. for Global-Global
-test
+Tests that didn't pass:
+1) Sspecial_tests/rand_tests/ex9_in.txt
