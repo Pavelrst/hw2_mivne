@@ -1,3 +1,4 @@
 What to do next:
 
 1) Calculation of flushes + size of table etc. for Global-Global
+test
